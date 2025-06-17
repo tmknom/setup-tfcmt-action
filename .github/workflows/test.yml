@@ -15,8 +15,8 @@ defaults:
     shell: bash
 
 jobs:
-  test:
-    name: Test
+  test-specifying-version:
+    name: Test specifying version
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -25,24 +25,53 @@ jobs:
       - name: Checkout
         uses: tmknom/checkout-action@v1
 
-      - name: Setup
-        run: |
-          set -x
-          echo "Setup"
-
       - name: Exercise
-        id: exercise
         uses: ./
+        with:
+          tfcmt-version: 4.14.0
 
       - name: Verify
-        env:
-          OUTCOME: ${{ steps.exercise.outcome }}
         run: |
           set -x
-          test "${OUTCOME}" = "success"
+          actual="$(tfcmt --version)"
+          grep 'tfcmt version 4.14.0' <<<"${actual}"
 
-      - name: Teardown
-        if: ${{ always() }}
+  test-latest-version:
+    name: Test latest version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: tmknom/checkout-action@v1
+
+      - name: Exercise
+        uses: ./
+        with:
+          tfcmt-version: latest
+
+      - name: Verify
         run: |
           set -x
-          echo "Teardown"
+          actual="$(tfcmt --version)"
+          grep 'tfcmt version 4.' <<<"${actual}"
+
+  test-omit-version:
+    name: Test omit version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: tmknom/checkout-action@v1
+
+      - name: Exercise
+        uses: ./
+
+      - name: Verify tfcmt
+        run: |
+          set -x
+          actual="$(tfcmt --version)"
+          grep 'tfcmt version 4.' <<<"${actual}"
