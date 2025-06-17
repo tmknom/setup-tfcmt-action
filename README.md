@@ -1,26 +1,33 @@
-# template-composite-action
+# setup-tfcmt-action
 
-Template repository for Composite Action.
+Set up your GitHub Actions workflow with a specific version of tfcmt.
 
 <!-- actdocs start -->
 
 ## Description
 
-Template repository for creating Composite Action with GitHub Actions.
+This action sets up [tfcmt](https://github.com/suzuki-shunsuke/tfcmt) in your GitHub Actions workflow by:
+
+- Installing a specified version of tfcmt
+- Verifying the authenticity and integrity of the downloaded binaries to prevent tampering
+
+The tfcmt simplifies commenting on the results of Terraform CLI commands in pull requests.
 
 ## Usage
 
-Write usage for your Composite Action.
-
 ```yaml
   steps:
-    - name: Template
-      uses: tmknom/template-composite-action@v0
+    - name: Setup tfcmt
+      uses: tmknom/setup-tfcmt-action@v0
+      with:
+        tfcmt-version: 4.14.0
 ```
 
 ## Inputs
 
-N/A
+| Name | Description | Default | Required |
+| :--- | :---------- | :------ | :------: |
+| tfcmt-version | The version of tfcmt to install. | `latest` | no |
 
 ## Outputs
 
@@ -44,4 +51,4 @@ N/A
 
 See [GitHub Releases][releases].
 
-[releases]: https://github.com/tmknom/template-composite-action/releases
+[releases]: https://github.com/tmknom/setup-tfcmt-action/releases
