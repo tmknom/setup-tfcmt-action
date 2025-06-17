@@ -1,23 +1,146 @@
-name: Rename me
+name: Setup tfcmt
 description: |
-  Template repository for creating Composite Action with GitHub Actions.
+  This action sets up [tfcmt](https://github.com/suzuki-shunsuke/tfcmt) in your GitHub Actions workflow by:
+
+  - Installing a specified version of tfcmt
+  - Verifying the authenticity and integrity of the downloaded binaries to prevent tampering
+
+  The tfcmt simplifies commenting on the results of Terraform CLI commands in pull requests.
 
   ## Usage
 
-  Write usage for your Composite Action.
-
   ```yaml
     steps:
-      - name: Template
-        uses: tmknom/template-composite-action@v0
+      - name: Setup tfcmt
+        uses: tmknom/setup-tfcmt-action@v0
+        with:
+          tfcmt-version: 4.14.0
   ```
+
+inputs:
+  tfcmt-version:
+    default: latest
+    required: false
+    description: The version of tfcmt to install.
 
 runs:
   using: composite
 
   steps:
-    - name: Run
+    - name: Create working directory
+      id: work
       run: |
+        echo "::group::Create working directory"
         set -x
-        echo "Write steps"
+
+        # Create base directory
+        repo="$(cut -d / -f 7 <<<"${GITHUB_ACTION_PATH/./${GITHUB_REPOSITORY_ID}}")"
+        owner="$(cut -d / -f 6 <<<"${GITHUB_ACTION_PATH}")"
+        sha256="$(sha256sum "${GITHUB_ACTION_PATH}/action.yml" | cut -d ' ' -f 1)"
+
+        base_dir="${RUNNER_TEMP}/__${owner}-${repo}-${sha256}"
+        echo "base-dir=${base_dir}" >> "${GITHUB_OUTPUT}"
+        mkdir -p "${base_dir}"
+
+        # Create download directory
+        download_dir="${base_dir}/download"
+        echo "download-dir=${download_dir}" >> "${GITHUB_OUTPUT}"
+        mkdir -p "${download_dir}"
+
+        # Create bin directory and set system PATH environment variables
+        bin_dir="${base_dir}/bin"
+        echo "bin-dir=${bin_dir}" >> "${GITHUB_OUTPUT}"
+        mkdir -p "${bin_dir}"
+        echo "${bin_dir}" >> "${GITHUB_PATH}"
+
+        echo "::endgroup::"
+      shell: bash
+
+    - name: Determine tfcmt version
+      id: tfcmt
+      env:
+        TFCMT_VERSION: ${{ inputs.tfcmt-version }}
+      run: |
+        echo "::group::Determine tfcmt version"
+        set -x
+        version="${TFCMT_VERSION}"
+        if [[ "${TFCMT_VERSION}" == "latest" ]]; then
+          api_url="https://api.github.com/repos/suzuki-shunsuke/tfcmt/releases/latest"
+          version="$(curl --silent --show-error "${api_url}" | jq -r '.tag_name')"
+        fi
+        no_prefix="${version/v/}"
+        echo "version=${no_prefix}" >> "${GITHUB_OUTPUT}"
+        echo "::endgroup::"
+      shell: bash
+
+    - name: Check verification tool is installed
+      id: installed
+      run: |
+        echo "::group::Check verification tool is installed"
+        set -x
+        installed_cosign="false"
+        if [ "$(which cosign)" ]; then
+          installed_cosign="true"
+        fi;
+        echo "cosign=${installed_cosign}" >> "${GITHUB_OUTPUT}"
+        echo "::endgroup::"
+      shell: bash
+
+    - name: Install Cosign
+      uses: sigstore/cosign-installer@3454372f43399081ed03b604cb2d021dabca52bb # v3.8.2
+      if: ${{ steps.installed.outputs.cosign == 'false' }}
+
+    - name: Install tfcmt
+      working-directory: ${{ steps.work.outputs.download-dir }}
+      env:
+        VERSION: ${{ steps.tfcmt.outputs.version }}
+        BIN_DIR: ${{ steps.work.outputs.bin-dir }}
+        GITHUB_TOKEN: ${{ github.token }}
+      run: |
+        echo "::group::Install tfcmt"
+        set -x
+        repo="suzuki-shunsuke/tfcmt"
+        version_tag="v${VERSION}"
+
+        archive_file="tfcmt_linux_amd64.tar.gz"
+        checksum_file="tfcmt_${VERSION}_checksums.txt"
+        signature_file="${checksum_file}.sig"
+        certificate_file="${checksum_file}.pem"
+
+        # Download asset files
+        base_url="https://github.com/${repo}/releases/download/${version_tag}"
+        curl --silent --show-error --fail --location --remote-name "${base_url}/${archive_file}"
+        curl --silent --show-error --fail --location --remote-name "${base_url}/${checksum_file}"
+        curl --silent --show-error --fail --location --remote-name "${base_url}/${signature_file}"
+        curl --silent --show-error --fail --location --remote-name "${base_url}/${certificate_file}"
+
+        # Verify checksum file by cosign
+        cosign verify-blob \
+          --signature "${signature_file}" \
+          --certificate "${certificate_file}" \
+          --certificate-identity-regexp 'https://github\.com/suzuki-shunsuke/go-release-workflow/\.github/workflows/release\.yaml@.*' \
+          --certificate-oidc-issuer "https://token.actions.githubusercontent.com" \
+          "${checksum_file}"
+        grep "${archive_file}" "${checksum_file}" | sha256sum --check
+
+        # Verify artifact attestations by GitHub CLI
+        gh attestation verify "${archive_file}" \
+          -R "${repo}" \
+          --signer-workflow suzuki-shunsuke/go-release-workflow/.github/workflows/release.yaml
+
+        # Install binary
+        tar -zxvf "${archive_file}"
+        mv tfcmt "${BIN_DIR}"
+        echo "::endgroup::"
+      shell: bash
+
+    - name: Remove unnecessary files
+      if: ${{ success() || failure() }}
+      env:
+        DOWNLOAD_DIR: ${{ steps.work.outputs.download-dir }}
+      run: |
+        echo "::group::Remove unnecessary files"
+        set -x
+        rm -rf "${DOWNLOAD_DIR}"
+        echo "::endgroup::"
       shell: bash
