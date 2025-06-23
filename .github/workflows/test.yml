@@ -23,7 +23,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: tmknom/checkout-action@v1
+        uses: tmknom/secure-checkout-action@v1
 
       - name: Exercise
         uses: ./
@@ -44,7 +44,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: tmknom/checkout-action@v1
+        uses: tmknom/secure-checkout-action@v1
 
       - name: Exercise
         uses: ./
@@ -65,7 +65,7 @@ jobs:
       contents: read
     steps:
       - name: Checkout
-        uses: tmknom/checkout-action@v1
+        uses: tmknom/secure-checkout-action@v1
 
       - name: Exercise
         uses: ./
